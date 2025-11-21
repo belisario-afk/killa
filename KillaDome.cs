@@ -731,8 +731,13 @@ namespace Oxide.Plugins
             var player = arg.Player();
             if (player == null || !arg.HasArgs(1)) return;
             
-            // This is just for UI feedback - category selection
-            // In a full implementation, this would filter the attachments shown
+            string category = arg.Args[0].ToLower(); // "scopes", "silencers", "underbarrel"
+            if (category != "scopes" && category != "silencers" && category != "underbarrel") return;
+            
+            var session = GetSession(player.userID);
+            if (session == null) return;
+            
+            session.SelectedAttachmentCategory = category;
             _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
         }
         
@@ -764,6 +769,7 @@ namespace Oxide.Plugins
             public string SelectedItem { get; set; }
             public bool IsInMatch { get; set; }
             public string EditingWeaponSlot { get; set; } // "primary" or "secondary"
+            public string SelectedAttachmentCategory { get; set; } // "scopes", "silencers", "underbarrel"
             
             internal PlayerSession(BasePlayer player, PlayerProfile profile)
             {
@@ -771,6 +777,7 @@ namespace Oxide.Plugins
                 Profile = profile;
                 LastAction = DateTime.UtcNow;
                 EditingWeaponSlot = "primary"; // Default to editing primary
+                SelectedAttachmentCategory = "scopes"; // Default to scopes tab
             }
         }
         
@@ -1381,22 +1388,27 @@ namespace Oxide.Plugins
                 }, "LoadoutEditorMain");
                 
                 // Attachment category tabs (3 tabs: Scopes, Silencers/Muzzle, Underbarrel)
+                string selectedCategory = session.SelectedAttachmentCategory ?? "scopes";
                 string[] categories = { "SCOPES", "SILENCERS", "UNDERBARREL" };
                 for (int i = 0; i < categories.Length; i++)
                 {
                     float xMin = 0.52f + (i * 0.15f);
                     float xMax = xMin + 0.14f;
                     
+                    bool isSelected = categories[i].ToLower() == selectedCategory;
+                    string buttonColor = isSelected ? "1 0.54 0 0.8" : "0.2 0.2 0.2 0.8";
+                    string textColor = isSelected ? "1 1 1 1" : "0.7 0.7 0.7 1";
+                    
                     container.Add(new CuiButton
                     {
-                        Button = { Command = $"killadome.attachcat {categories[i].ToLower()}", Color = "0.2 0.2 0.2 0.8" },
-                        Text = { Text = categories[i], FontSize = 9, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                        Button = { Command = $"killadome.attachcat {categories[i].ToLower()}", Color = buttonColor },
+                        Text = { Text = categories[i], FontSize = 9, Align = TextAnchor.MiddleCenter, Color = textColor },
                         RectTransform = { AnchorMin = $"{xMin} 0.87", AnchorMax = $"{xMax} 0.91" }
                     }, "LoadoutEditorMain");
                 }
                 
                 // Available attachments with actual Rust mod item short names
-                var availableAttachments = new[]
+                var allAttachments = new[]
                 {
                     // Scopes
                     new { Name = "Small Scope", Id = "weapon.mod.small.scope", ImageId = "small_scope", Category = "scopes", Desc = "Simple 4x scope" },
@@ -1413,6 +1425,9 @@ namespace Oxide.Plugins
                     new { Name = "Laser Sight", Id = "weapon.mod.lasersight", ImageId = "laser_sight", Category = "underbarrel", Desc = "Improved hip fire" },
                     new { Name = "Holo Sight", Id = "weapon.mod.holosight", ImageId = "holo_sight", Category = "underbarrel", Desc = "Red dot sight" },
                 };
+                
+                // Filter attachments by selected category
+                var availableAttachments = allAttachments.Where(a => a.Category == selectedCategory).ToArray();
                 
                 for (int i = 0; i < availableAttachments.Length; i++)
                 {
@@ -1649,12 +1664,23 @@ namespace Oxide.Plugins
                     }, UI_TAB_CONTAINER);
                 }
                 
-                // Attachments (RIGHT COLUMN)
+                // Attachments (RIGHT COLUMN) - All real Rust mod items
                 var attachments = new[]
                 {
-                    new { Name = "Extended Mag", Cost = 300, Id = "att_extended_mag", ImageId = "extended_mag" },
-                    new { Name = "Reflex Sight", Cost = 250, Id = "att_reflex_sight", ImageId = "reflex_sight" },
-                    new { Name = "Silencer", Cost = 400, Id = "att_silencer", ImageId = "silencer" }
+                    // Scopes
+                    new { Name = "Small Scope", Cost = 250, Id = "weapon.mod.small.scope", ImageId = "small_scope" },
+                    new { Name = "8x Scope", Cost = 400, Id = "weapon.mod.8x.scope", ImageId = "8x_scope" },
+                    
+                    // Silencers/Muzzle
+                    new { Name = "Soda Can Silencer", Cost = 150, Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer" },
+                    new { Name = "Oil Filter Silencer", Cost = 200, Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer" },
+                    new { Name = "Silencer", Cost = 400, Id = "weapon.mod.silencer", ImageId = "silencer" },
+                    new { Name = "Muzzle Brake", Cost = 300, Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake" },
+                    new { Name = "Muzzle Boost", Cost = 350, Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost" },
+                    
+                    // Underbarrel
+                    new { Name = "Laser Sight", Cost = 250, Id = "weapon.mod.lasersight", ImageId = "laser_sight" },
+                    new { Name = "Holo Sight", Cost = 300, Id = "weapon.mod.holosight", ImageId = "holo_sight" }
                 };
                 
                 // Column Title: ATTACHMENTS
