@@ -296,6 +296,7 @@ namespace Oxide.Plugins
                 if (ulong.TryParse(skinId, out ulong skin))
                 {
                     item.skin = skin;
+                    item.MarkDirty(); // Mark for network update
                 }
             }
             
@@ -323,6 +324,14 @@ namespace Oxide.Plugins
             
             // Give item to player
             player.inventory.GiveItem(item);
+            
+            // If item was given to belt, ensure visual update
+            var heldItem = item.GetHeldEntity();
+            if (heldItem != null)
+            {
+                heldItem.skinID = item.skin;
+                heldItem.SendNetworkUpdate();
+            }
             
             // Give ammo
             string ammoType = weaponName == "pistol" ? "ammo.pistol" : "ammo.rifle";
@@ -757,6 +766,106 @@ namespace Oxide.Plugins
             _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
         }
         
+        [ChatCommand("dice")]
+        private void CmdDiceGame(BasePlayer player, string command, string[] args)
+        {
+            if (player == null) return;
+            
+            var session = GetSession(player.userID);
+            if (session == null)
+            {
+                SendReply(player, "Session not found! Please rejoin.");
+                return;
+            }
+            
+            // Check if player is in cooldown
+            if (session.LastDiceGame != default && (DateTime.UtcNow - session.LastDiceGame).TotalSeconds < 30)
+            {
+                int remaining = 30 - (int)(DateTime.UtcNow - session.LastDiceGame).TotalSeconds;
+                SendReply(player, $"<color=#FF8A00>Dice Game:</color> Wait {remaining}s before playing again!");
+                return;
+            }
+            
+            if (args.Length == 0)
+            {
+                SendReply(player, "<color=#FF8A00>Dice Game:</color> Roll the dice! Win 2x your bet!");
+                SendReply(player, "Usage: /dice <bet> (10-100 tokens)");
+                SendReply(player, $"Your tokens: <color=#FF8A00>{session.Profile.Tokens}</color>");
+                return;
+            }
+            
+            if (!int.TryParse(args[0], out int bet))
+            {
+                SendReply(player, "<color=#FF8A00>Dice Game:</color> Invalid bet amount!");
+                return;
+            }
+            
+            if (bet < 10 || bet > 100)
+            {
+                SendReply(player, "<color=#FF8A00>Dice Game:</color> Bet must be between 10-100 tokens!");
+                return;
+            }
+            
+            if (session.Profile.Tokens < bet)
+            {
+                SendReply(player, $"<color=#FF8A00>Dice Game:</color> Not enough tokens! You have {session.Profile.Tokens}");
+                return;
+            }
+            
+            // Deduct bet
+            session.Profile.Tokens -= bet;
+            session.LastDiceGame = DateTime.UtcNow;
+            
+            // Roll dice (1-6 for player, 1-6 for house)
+            int playerRoll = UnityEngine.Random.Range(1, 7);
+            int houseRoll = UnityEngine.Random.Range(1, 7);
+            
+            SendReply(player, $"<color=#FF8A00>╔═══════════════════╗</color>");
+            SendReply(player, $"<color=#FF8A00>║</color>   DICE GAME    <color=#FF8A00>║</color>");
+            SendReply(player, $"<color=#FF8A00>╚═══════════════════╝</color>");
+            SendReply(player, $"Your roll: <color=#4CFF4C>[{playerRoll}]</color>");
+            SendReply(player, $"House roll: <color=#FF4C4C>[{houseRoll}]</color>");
+            
+            if (playerRoll > houseRoll)
+            {
+                int winnings = bet * 2;
+                session.Profile.Tokens += winnings;
+                SendReply(player, $"<color=#4CFF4C>★ YOU WIN! ★</color> +{winnings} tokens");
+                SendReply(player, $"Balance: <color=#FF8A00>{session.Profile.Tokens}</color> tokens");
+                Effect.server.Run("assets/prefabs/deployable/vendingmachine/effects/buy.prefab", player.transform.position);
+            }
+            else if (playerRoll < houseRoll)
+            {
+                SendReply(player, $"<color=#FF4C4C>✖ YOU LOSE!</color> -{bet} tokens");
+                SendReply(player, $"Balance: <color=#FF8A00>{session.Profile.Tokens}</color> tokens");
+                Effect.server.Run("assets/prefabs/deployable/vendingmachine/effects/deny.prefab", player.transform.position);
+            }
+            else
+            {
+                // Tie - return bet
+                session.Profile.Tokens += bet;
+                SendReply(player, $"<color=#FFD700>═ TIE! ═</color> Bet returned");
+                SendReply(player, $"Balance: <color=#FF8A00>{session.Profile.Tokens}</color> tokens");
+            }
+            
+            _saveManager.SavePlayerProfile(session.Profile);
+        }
+        
+        [ChatCommand("tokengame")]
+        private void CmdTokenGameHelp(BasePlayer player, string command, string[] args)
+        {
+            SendReply(player, "<color=#FF8A00>╔═══════════════════════════╗</color>");
+            SendReply(player, "<color=#FF8A00>║</color>  BLOOD TOKEN GAMES     <color=#FF8A00>║</color>");
+            SendReply(player, "<color=#FF8A00>╚═══════════════════════════╝</color>");
+            SendReply(player, "");
+            SendReply(player, "<color=#4CFF4C>/dice <bet></color> - Roll dice vs house");
+            SendReply(player, "  • Bet: 10-100 tokens");
+            SendReply(player, "  • Win: 2x your bet");
+            SendReply(player, "  • Cooldown: 30 seconds");
+            SendReply(player, "");
+            SendReply(player, "<color=#FFD700>More games coming soon!</color>");
+        }
+        
         #endregion
         
         #region Data Models
@@ -770,6 +879,7 @@ namespace Oxide.Plugins
             public bool IsInMatch { get; set; }
             public string EditingWeaponSlot { get; set; } // "primary" or "secondary"
             public string SelectedAttachmentCategory { get; set; } // "scopes", "silencers", "underbarrel"
+            public DateTime LastDiceGame { get; set; } // Cooldown for dice game
             
             internal PlayerSession(BasePlayer player, PlayerProfile profile)
             {
