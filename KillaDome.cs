@@ -1169,6 +1169,12 @@ namespace Oxide.Plugins
                 string editingSlot = session.EditingWeaponSlot ?? "primary";
                 string currentWeapon = editingSlot == "primary" ? loadout.Primary : loadout.Secondary;
                 
+                // Safety check for null weapon
+                if (string.IsNullOrEmpty(currentWeapon))
+                {
+                    currentWeapon = editingSlot == "primary" ? "ak47" : "pistol";
+                }
+                
                 // Selector panel
                 container.Add(new CuiPanel
                 {
