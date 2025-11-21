@@ -39,7 +39,6 @@ namespace Oxide.Plugins
         private LobbyUI _lobbyUI;
         private LoadoutEditor _loadoutEditor;
         private AttachmentSystem _attachmentSystem;
-        private AlterEgoSystem _alterEgoSystem;
         private WeaponProgression _weaponProgression;
         private VFXManager _vfxManager;
         private SFXManager _sfxManager;
@@ -137,7 +136,6 @@ namespace Oxide.Plugins
             _antiExploit = new AntiExploit(this);
             _tokenEconomy = new BloodTokenEconomy(this, _config);
             _attachmentSystem = new AttachmentSystem(this, _config);
-            _alterEgoSystem = new AlterEgoSystem(this);
             _weaponProgression = new WeaponProgression(this, _config);
             _vfxManager = new VFXManager(this);
             _sfxManager = new SFXManager(this);
@@ -954,59 +952,6 @@ namespace Oxide.Plugins
             }
         }
         
-        // Alter-Ego Attachment System
-        public class AttachmentStats
-        {
-            public float RecoilMul { get; set; } = 1.0f;
-            public float AimconeMul { get; set; } = 1.0f;
-            public float ADSSpeedMul { get; set; } = 1.0f;
-            public float ReloadSpeedMul { get; set; } = 1.0f;
-            public float FireRateMul { get; set; } = 1.0f;
-            public float DamageMul { get; set; } = 1.0f;
-            public float VelocityMul { get; set; } = 1.0f;
-            public float MoveSpeedMul { get; set; } = 1.0f;
-            public float OnHitHP { get; set; } = 0f;
-            public float OnKillHP { get; set; } = 0f;
-            public float BleedChance { get; set; } = 0f;
-            public float StaggerChance { get; set; } = 0f;
-            public float HorizontalStability { get; set; } = 0f;
-            public string VFXPath { get; set; } = null;
-            public string SFXPath { get; set; } = null;
-        }
-        
-        public class SynergyRule
-        {
-            public List<string> RequiredAttachments { get; set; }
-            public Dictionary<string, float> Multipliers { get; set; }
-            public Dictionary<string, float> Additives { get; set; }
-            
-            public SynergyRule()
-            {
-                RequiredAttachments = new List<string>();
-                Multipliers = new Dictionary<string, float>();
-                Additives = new Dictionary<string, float>();
-            }
-        }
-        
-        public class WeaponModifierState
-        {
-            public float RecoilMul { get; set; } = 1.0f;
-            public float AimconeMul { get; set; } = 1.0f;
-            public float ADSSpeedMul { get; set; } = 1.0f;
-            public float ReloadSpeedMul { get; set; } = 1.0f;
-            public float FireRateMul { get; set; } = 1.0f;
-            public float DamageMul { get; set; } = 1.0f;
-            public float VelocityMul { get; set; } = 1.0f;
-            public float MoveSpeedMul { get; set; } = 1.0f;
-            public float OnHitHP { get; set; } = 0f;
-            public float OnKillHP { get; set; } = 0f;
-            public float BleedChance { get; set; } = 0f;
-            public float StaggerChance { get; set; } = 0f;
-            public float HorizontalStability { get; set; } = 0f;
-            public bool HasSodaCanVFX { get; set; } = false;
-            public bool HasBrakeVFX { get; set; } = false;
-        }
-        
         #endregion
         
         #region Module: DomeManager
@@ -1104,395 +1049,6 @@ namespace Oxide.Plugins
             public DateTime EndTime { get; set; }
             public bool IsActive { get; set; }
             public List<ulong> Participants { get; set; } = new List<ulong>();
-        }
-        
-        #endregion
-        
-        #region Module: AlterEgoSystem
-        
-        internal class AlterEgoSystem
-        {
-            private KillaDome _plugin;
-            private Dictionary<string, ulong> _alterEgoSkinIds;
-            private Dictionary<string, AttachmentStats> _alterEgoStats;
-            private List<SynergyRule> _pairSynergies;
-            private List<SynergyRule> _tripleSynergies;
-            
-            internal AlterEgoSystem(KillaDome plugin)
-            {
-                _plugin = plugin;
-                InitializeAlterEgoSkinIds();
-                InitializeAlterEgoStats();
-                InitializeSynergies();
-            }
-            
-            private void InitializeAlterEgoSkinIds()
-            {
-                _alterEgoSkinIds = new Dictionary<string, ulong>
-                {
-                    { "weapon.mod.small.scope", 900001 },
-                    { "weapon.mod.8x.scope", 900002 },
-                    { "weapon.mod.holosight", 900003 },
-                    { "weapon.mod.lasersight", 900004 },
-                    { "weapon.mod.sodacansilencer", 900005 },
-                    { "weapon.mod.oilfiltersilencer", 900006 },
-                    { "weapon.mod.silencer", 900007 },
-                    { "weapon.mod.muzzlebrake", 900008 },
-                    { "weapon.mod.muzzleboost", 900009 }
-                };
-            }
-            
-            private void InitializeAlterEgoStats()
-            {
-                _alterEgoStats = new Dictionary<string, AttachmentStats>
-                {
-                    {
-                        "weapon.mod.small.scope", new AttachmentStats
-                        {
-                            RecoilMul = 0.90f,
-                            AimconeMul = 0.95f,
-                            ADSSpeedMul = 0.92f,
-                            MoveSpeedMul = 1.04f
-                        }
-                    },
-                    {
-                        "weapon.mod.8x.scope", new AttachmentStats
-                        {
-                            RecoilMul = 0.88f,
-                            AimconeMul = 0.94f,
-                            VelocityMul = 1.10f,
-                            DamageMul = 1.07f
-                        }
-                    },
-                    {
-                        "weapon.mod.holosight", new AttachmentStats
-                        {
-                            ADSSpeedMul = 0.88f,
-                            AimconeMul = 0.92f,
-                            MoveSpeedMul = 1.04f,
-                            DamageMul = 1.03f
-                        }
-                    },
-                    {
-                        "weapon.mod.lasersight", new AttachmentStats
-                        {
-                            AimconeMul = 0.90f,
-                            RecoilMul = 0.95f,
-                            StaggerChance = 0.10f,
-                            MoveSpeedMul = 1.02f
-                        }
-                    },
-                    {
-                        "weapon.mod.sodacansilencer", new AttachmentStats
-                        {
-                            RecoilMul = 0.90f,
-                            AimconeMul = 0.92f,
-                            DamageMul = 0.90f,
-                            OnHitHP = 0.5f,
-                            VFXPath = "assets/bundled/prefabs/fx/smoke_small.prefab",
-                            SFXPath = "assets/bundled/sound/weapons/silencer/ricochet1.wav"
-                        }
-                    },
-                    {
-                        "weapon.mod.oilfiltersilencer", new AttachmentStats
-                        {
-                            RecoilMul = 0.90f,
-                            VelocityMul = 1.10f,
-                            BleedChance = 0.05f
-                        }
-                    },
-                    {
-                        "weapon.mod.silencer", new AttachmentStats
-                        {
-                            RecoilMul = 0.85f,
-                            AimconeMul = 0.90f,
-                            DamageMul = 1.02f,
-                            OnKillHP = 5f
-                        }
-                    },
-                    {
-                        "weapon.mod.muzzlebrake", new AttachmentStats
-                        {
-                            RecoilMul = 0.70f,
-                            AimconeMul = 1.08f,
-                            HorizontalStability = 0.30f,
-                            VFXPath = "assets/bundled/prefabs/fx/weapons/muzzleflash/muzzleflash1.prefab",
-                            SFXPath = "assets/bundled/sound/weapons/rifle/echo_close.wav"
-                        }
-                    },
-                    {
-                        "weapon.mod.muzzleboost", new AttachmentStats
-                        {
-                            FireRateMul = 1.20f,
-                            RecoilMul = 1.15f,
-                            DamageMul = 0.95f,
-                            OnHitHP = 0.2f
-                        }
-                    }
-                };
-            }
-            
-            private void InitializeSynergies()
-            {
-                // Pair Synergies (10 total)
-                _pairSynergies = new List<SynergyRule>
-                {
-                    // SmallScope + Brake
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.small.scope", "weapon.mod.muzzlebrake" },
-                        Multipliers = new Dictionary<string, float> { { "RecoilMul", 0.88f }, { "ADSSpeedMul", 1.05f } }
-                    },
-                    // SmallScope + Holo
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.small.scope", "weapon.mod.holosight" },
-                        Multipliers = new Dictionary<string, float> { { "AimconeMul", 0.95f }, { "ADSSpeedMul", 0.96f } }
-                    },
-                    // 8x + Oil
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.8x.scope", "weapon.mod.oilfiltersilencer" },
-                        Multipliers = new Dictionary<string, float> { { "VelocityMul", 1.07f } },
-                        Additives = new Dictionary<string, float> { { "BleedChance", 0.03f } }
-                    },
-                    // 8x + Brake
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.8x.scope", "weapon.mod.muzzlebrake" },
-                        Multipliers = new Dictionary<string, float> { { "RecoilMul", 0.95f } },
-                        Additives = new Dictionary<string, float> { { "HorizontalStability", 0.10f } }
-                    },
-                    // Holo + Laser
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.holosight", "weapon.mod.lasersight" },
-                        Multipliers = new Dictionary<string, float> { { "AimconeMul", 0.85f }, { "ADSSpeedMul", 0.95f } }
-                    },
-                    // Holo + Boost
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.holosight", "weapon.mod.muzzleboost" },
-                        Multipliers = new Dictionary<string, float> { { "FireRateMul", 1.04f }, { "AimconeMul", 1.05f } }
-                    },
-                    // Laser + Silencer
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.lasersight", "weapon.mod.silencer" },
-                        Multipliers = new Dictionary<string, float> { { "AimconeMul", 0.92f } },
-                        Additives = new Dictionary<string, float> { { "StaggerChance", 0.03f } }
-                    },
-                    // Laser + SodaCan
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.lasersight", "weapon.mod.sodacansilencer" },
-                        Multipliers = new Dictionary<string, float> { { "RecoilMul", 0.97f }, { "DamageMul", 1.03f } }
-                    },
-                    // Brake + SodaCan
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.muzzlebrake", "weapon.mod.sodacansilencer" },
-                        Multipliers = new Dictionary<string, float> { { "RecoilMul", 0.93f }, { "DamageMul", 1.02f } }
-                    },
-                    // Boost + SodaCan
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.muzzleboost", "weapon.mod.sodacansilencer" },
-                        Multipliers = new Dictionary<string, float> { { "FireRateMul", 1.06f }, { "RecoilMul", 1.12f } }
-                    }
-                };
-                
-                // Triple Synergies (5 total)
-                _tripleSynergies = new List<SynergyRule>
-                {
-                    // Holo + Laser + Boost
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.holosight", "weapon.mod.lasersight", "weapon.mod.muzzleboost" },
-                        Multipliers = new Dictionary<string, float> { { "FireRateMul", 1.03f }, { "AimconeMul", 0.93f } }
-                    },
-                    // 8x + Oil + Silencer
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.8x.scope", "weapon.mod.oilfiltersilencer", "weapon.mod.silencer" },
-                        Multipliers = new Dictionary<string, float> { { "VelocityMul", 1.05f }, { "DamageMul", 1.04f } },
-                        Additives = new Dictionary<string, float> { { "BleedChance", 0.02f } }
-                    },
-                    // Small + Brake + Laser
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.small.scope", "weapon.mod.muzzlebrake", "weapon.mod.lasersight" },
-                        Multipliers = new Dictionary<string, float> { { "RecoilMul", 0.90f } },
-                        Additives = new Dictionary<string, float> { { "HorizontalStability", 0.08f } }
-                    },
-                    // SodaCan + Boost + Brake
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.sodacansilencer", "weapon.mod.muzzleboost", "weapon.mod.muzzlebrake" },
-                        Multipliers = new Dictionary<string, float> { { "FireRateMul", 1.04f }, { "RecoilMul", 1.05f }, { "DamageMul", 1.03f } }
-                    },
-                    // Holo + Silencer + Small
-                    new SynergyRule
-                    {
-                        RequiredAttachments = new List<string> { "weapon.mod.holosight", "weapon.mod.silencer", "weapon.mod.small.scope" },
-                        Multipliers = new Dictionary<string, float> { { "ADSSpeedMul", 0.93f }, { "AimconeMul", 0.95f } }
-                    }
-                };
-            }
-            
-            // Check if an attachment is Alter-Ego version
-            internal bool IsAlterEgo(string attachmentId, ulong skinId)
-            {
-                return _alterEgoSkinIds.TryGetValue(attachmentId, out ulong aeSkinId) && skinId == aeSkinId;
-            }
-            
-            // Get Alter-Ego skin ID for an attachment
-            internal ulong GetAlterEgoSkinId(string attachmentId)
-            {
-                return _alterEgoSkinIds.TryGetValue(attachmentId, out ulong skinId) ? skinId : 0;
-            }
-            
-            // Calculate weapon modifier state from equipped attachments (11-step synergy engine)
-            internal WeaponModifierState CalculateModifiers(Dictionary<string, string> attachments, PlayerProfile profile)
-            {
-                var result = new WeaponModifierState();
-                
-                if (attachments == null || attachments.Count == 0)
-                    return result;
-                
-                // Step 1 & 2: Gather active Alter-Ego attachments and convert to percent changes
-                var activeAttachments = new List<string>();
-                var percentChanges = new Dictionary<string, List<float>>
-                {
-                    { "RecoilMul", new List<float>() },
-                    { "AimconeMul", new List<float>() },
-                    { "ADSSpeedMul", new List<float>() },
-                    { "ReloadSpeedMul", new List<float>() },
-                    { "FireRateMul", new List<float>() },
-                    { "DamageMul", new List<float>() },
-                    { "VelocityMul", new List<float>() },
-                    { "MoveSpeedMul", new List<float>() }
-                };
-                
-                foreach (var attachment in attachments.Values)
-                {
-                    // Check if player owns this attachment and if it's Alter-Ego
-                    var ownedItem = profile.OwnedSkins.FirstOrDefault(s => s == attachment || s == attachment + "_AE");
-                    if (ownedItem != null && ownedItem.EndsWith("_AE") && _alterEgoStats.TryGetValue(attachment, out var stats))
-                    {
-                        activeAttachments.Add(attachment);
-                        
-                        // Convert multipliers to percent changes
-                        percentChanges["RecoilMul"].Add(stats.RecoilMul - 1.0f);
-                        percentChanges["AimconeMul"].Add(stats.AimconeMul - 1.0f);
-                        percentChanges["ADSSpeedMul"].Add(stats.ADSSpeedMul - 1.0f);
-                        percentChanges["ReloadSpeedMul"].Add(stats.ReloadSpeedMul - 1.0f);
-                        percentChanges["FireRateMul"].Add(stats.FireRateMul - 1.0f);
-                        percentChanges["DamageMul"].Add(stats.DamageMul - 1.0f);
-                        percentChanges["VelocityMul"].Add(stats.VelocityMul - 1.0f);
-                        percentChanges["MoveSpeedMul"].Add(stats.MoveSpeedMul - 1.0f);
-                        
-                        // Step 4: Add additive stats
-                        result.OnHitHP += stats.OnHitHP;
-                        result.OnKillHP += stats.OnKillHP;
-                        result.BleedChance += stats.BleedChance;
-                        result.StaggerChance += stats.StaggerChance;
-                        result.HorizontalStability += stats.HorizontalStability;
-                        
-                        // Track VFX/SFX
-                        if (attachment == "weapon.mod.sodacansilencer" && !string.IsNullOrEmpty(stats.VFXPath))
-                            result.HasSodaCanVFX = true;
-                        if (attachment == "weapon.mod.muzzlebrake" && !string.IsNullOrEmpty(stats.VFXPath))
-                            result.HasBrakeVFX = true;
-                    }
-                }
-                
-                // Step 3: Sum percent changes and convert to BaseFinalMul
-                foreach (var stat in percentChanges.Keys)
-                {
-                    float totalPct = percentChanges[stat].Sum();
-                    float baseFinalMul = 1.0f + totalPct;
-                    
-                    // Store base multiplier
-                    switch (stat)
-                    {
-                        case "RecoilMul": result.RecoilMul = baseFinalMul; break;
-                        case "AimconeMul": result.AimconeMul = baseFinalMul; break;
-                        case "ADSSpeedMul": result.ADSSpeedMul = baseFinalMul; break;
-                        case "ReloadSpeedMul": result.ReloadSpeedMul = baseFinalMul; break;
-                        case "FireRateMul": result.FireRateMul = baseFinalMul; break;
-                        case "DamageMul": result.DamageMul = baseFinalMul; break;
-                        case "VelocityMul": result.VelocityMul = baseFinalMul; break;
-                        case "MoveSpeedMul": result.MoveSpeedMul = baseFinalMul; break;
-                    }
-                }
-                
-                // Step 5 & 6: Apply pair synergies
-                foreach (var synergy in _pairSynergies)
-                {
-                    if (synergy.RequiredAttachments.All(req => activeAttachments.Contains(req)))
-                    {
-                        ApplySynergy(result, synergy);
-                    }
-                }
-                
-                // Step 6: Apply triple synergies
-                foreach (var synergy in _tripleSynergies)
-                {
-                    if (synergy.RequiredAttachments.All(req => activeAttachments.Contains(req)))
-                    {
-                        ApplySynergy(result, synergy);
-                    }
-                }
-                
-                // Step 8: Apply clamping
-                result.RecoilMul = Mathf.Clamp(result.RecoilMul, 0.5f, 1.6f);
-                result.AimconeMul = Mathf.Clamp(result.AimconeMul, 0.6f, 1.5f);
-                result.FireRateMul = Mathf.Clamp(result.FireRateMul, 0.7f, 2.0f);
-                result.DamageMul = Mathf.Clamp(result.DamageMul, 0.6f, 1.5f);
-                result.VelocityMul = Mathf.Clamp(result.VelocityMul, 0.7f, 1.4f);
-                result.ADSSpeedMul = Mathf.Clamp(result.ADSSpeedMul, 0.6f, 1.4f);
-                result.ReloadSpeedMul = Mathf.Clamp(result.ReloadSpeedMul, 0.7f, 1.4f);
-                result.MoveSpeedMul = Mathf.Clamp(result.MoveSpeedMul, 0.8f, 1.2f);
-                
-                result.BleedChance = Mathf.Min(result.BleedChance, 0.50f);
-                result.StaggerChance = Mathf.Min(result.StaggerChance, 0.50f);
-                result.HorizontalStability = Mathf.Min(result.HorizontalStability, 0.50f);
-                
-                return result;
-            }
-            
-            private void ApplySynergy(WeaponModifierState state, SynergyRule synergy)
-            {
-                // Apply multiplicative synergies
-                foreach (var mult in synergy.Multipliers)
-                {
-                    switch (mult.Key)
-                    {
-                        case "RecoilMul": state.RecoilMul *= mult.Value; break;
-                        case "AimconeMul": state.AimconeMul *= mult.Value; break;
-                        case "ADSSpeedMul": state.ADSSpeedMul *= mult.Value; break;
-                        case "ReloadSpeedMul": state.ReloadSpeedMul *= mult.Value; break;
-                        case "FireRateMul": state.FireRateMul *= mult.Value; break;
-                        case "DamageMul": state.DamageMul *= mult.Value; break;
-                        case "VelocityMul": state.VelocityMul *= mult.Value; break;
-                        case "MoveSpeedMul": state.MoveSpeedMul *= mult.Value; break;
-                    }
-                }
-                
-                // Apply additive synergies
-                foreach (var add in synergy.Additives)
-                {
-                    switch (add.Key)
-                    {
-                        case "OnHitHP": state.OnHitHP += add.Value; break;
-                        case "OnKillHP": state.OnKillHP += add.Value; break;
-                        case "BleedChance": state.BleedChance += add.Value; break;
-                        case "StaggerChance": state.StaggerChance += add.Value; break;
-                        case "HorizontalStability": state.HorizontalStability += add.Value; break;
-                    }
-                }
-            }
         }
         
         #endregion
@@ -2218,32 +1774,23 @@ namespace Oxide.Plugins
                     }, UI_TAB_CONTAINER);
                 }
                 
-                // Attachments (RIGHT COLUMN) - Both Normal and Alter-Ego versions
+                // Attachments (RIGHT COLUMN) - All real Rust mod items
                 var attachments = new[]
                 {
-                    // Scopes - Normal
-                    new { Name = "Small Scope", Cost = 250, Id = "weapon.mod.small.scope", ImageId = "small_scope", IsAlterEgo = false },
-                    new { Name = "Small Scope AE", Cost = 600, Id = "weapon.mod.small.scope_AE", ImageId = "small_scope_ae", IsAlterEgo = true },
-                    new { Name = "8x Scope", Cost = 400, Id = "weapon.mod.8x.scope", ImageId = "8x_scope", IsAlterEgo = false },
-                    new { Name = "8x Scope AE", Cost = 800, Id = "weapon.mod.8x.scope_AE", ImageId = "8x_scope_ae", IsAlterEgo = true },
+                    // Scopes
+                    new { Name = "Small Scope", Cost = 250, Id = "weapon.mod.small.scope", ImageId = "small_scope" },
+                    new { Name = "8x Scope", Cost = 400, Id = "weapon.mod.8x.scope", ImageId = "8x_scope" },
                     
-                    // Underbarrel - Normal
-                    new { Name = "Holo Sight", Cost = 300, Id = "weapon.mod.holosight", ImageId = "holo_sight", IsAlterEgo = false },
-                    new { Name = "Holo Sight AE", Cost = 700, Id = "weapon.mod.holosight_AE", ImageId = "holo_sight_ae", IsAlterEgo = true },
-                    new { Name = "Laser Sight", Cost = 250, Id = "weapon.mod.lasersight", ImageId = "laser_sight", IsAlterEgo = false },
-                    new { Name = "Laser Sight AE", Cost = 650, Id = "weapon.mod.lasersight_AE", ImageId = "laser_sight_ae", IsAlterEgo = true },
+                    // Silencers/Muzzle
+                    new { Name = "Soda Can Silencer", Cost = 150, Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer" },
+                    new { Name = "Oil Filter Silencer", Cost = 200, Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer" },
+                    new { Name = "Silencer", Cost = 400, Id = "weapon.mod.silencer", ImageId = "silencer" },
+                    new { Name = "Muzzle Brake", Cost = 300, Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake" },
+                    new { Name = "Muzzle Boost", Cost = 350, Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost" },
                     
-                    // Silencers/Muzzle - Normal
-                    new { Name = "Soda Can Silencer", Cost = 150, Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer", IsAlterEgo = false },
-                    new { Name = "Soda Can Silencer AE", Cost = 550, Id = "weapon.mod.sodacansilencer_AE", ImageId = "sodacan_silencer_ae", IsAlterEgo = true },
-                    new { Name = "Oil Filter Silencer", Cost = 200, Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer", IsAlterEgo = false },
-                    new { Name = "Oil Filter Silencer AE", Cost = 600, Id = "weapon.mod.oilfiltersilencer_AE", ImageId = "oilfilter_silencer_ae", IsAlterEgo = true },
-                    new { Name = "Silencer", Cost = 400, Id = "weapon.mod.silencer", ImageId = "silencer", IsAlterEgo = false },
-                    new { Name = "Silencer AE", Cost = 800, Id = "weapon.mod.silencer_AE", ImageId = "silencer_ae", IsAlterEgo = true },
-                    new { Name = "Muzzle Brake", Cost = 300, Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake", IsAlterEgo = false },
-                    new { Name = "Muzzle Brake AE", Cost = 700, Id = "weapon.mod.muzzlebrake_AE", ImageId = "muzzle_brake_ae", IsAlterEgo = true },
-                    new { Name = "Muzzle Boost", Cost = 350, Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost", IsAlterEgo = false },
-                    new { Name = "Muzzle Boost AE", Cost = 750, Id = "weapon.mod.muzzleboost_AE", ImageId = "muzzle_boost_ae", IsAlterEgo = true }
+                    // Underbarrel
+                    new { Name = "Laser Sight", Cost = 250, Id = "weapon.mod.lasersight", ImageId = "laser_sight" },
+                    new { Name = "Holo Sight", Cost = 300, Id = "weapon.mod.holosight", ImageId = "holo_sight" }
                 };
                 
                 // Column Title: ATTACHMENTS
@@ -2253,12 +1800,12 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.52 0.62", AnchorMax = "0.88 0.67" }
                 }, UI_TAB_CONTAINER);
                 
-                // Attachments Items - Compact layout for 18 items
+                // Attachments Items
                 for (int i = 0; i < attachments.Length; i++)
                 {
                     var item = attachments[i];
-                    float yMin = 0.60f - (i * 0.08f); // Smaller vertical spacing
-                    float yMax = yMin + 0.07f; // Smaller item height
+                    float yMin = 0.52f - (i * 0.15f);
+                    float yMax = yMin + 0.10f;
                     
                     // Item panel with rounded corners and drop shadow effect
                     container.Add(new CuiPanel
@@ -2312,20 +1859,18 @@ namespace Oxide.Plugins
                         }
                     }
                     
-                    // Item name with AE badge if applicable
-                    string displayName = item.IsAlterEgo ? $"⚡ {item.Name}" : item.Name;
-                    string nameColor = item.IsAlterEgo ? "1 0.6 0 1" : "1 1 1 1"; // Orange for AE, white for normal
+                    // Item name (white)
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = displayName, FontSize = 11, Align = TextAnchor.UpperLeft, Color = nameColor },
-                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.04f}", AnchorMax = $"0.80 {yMax - 0.005f}" }
+                        Text = { Text = item.Name, FontSize = 13, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.055f}", AnchorMax = $"0.80 {yMax - 0.01f}" }
                     }, UI_TAB_CONTAINER);
                     
                     // Token price (orange)
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = $"{item.Cost} Tokens", FontSize = 9, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
-                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.01f}", AnchorMax = $"0.80 {yMin + 0.04f}" }
+                        Text = { Text = $"{item.Cost} Tokens", FontSize = 11, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.02f}", AnchorMax = $"0.80 {yMin + 0.055f}" }
                     }, UI_TAB_CONTAINER);
                     
                     // Sleek BUY button (matte steel-gray with rounded corners)
