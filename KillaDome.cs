@@ -313,11 +313,8 @@ namespace Oxide.Plugins
                             var attachmentItem = ItemManager.CreateByName(attachmentId, 1);
                             if (attachmentItem != null)
                             {
-                                // Add attachment to weapon's content
-                                if (!item.contents.itemList.Contains(attachmentItem))
-                                {
-                                    attachmentItem.MoveToContainer(item.contents);
-                                }
+                                // Add attachment to weapon's content container
+                                attachmentItem.MoveToContainer(item.contents);
                             }
                         }
                     }
