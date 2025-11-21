@@ -31,6 +31,9 @@ namespace Oxide.Plugins
     {
         #region Fields
         
+        [PluginReference]
+        private Plugin ImageLibrary;
+        
         private DomeManager _domeManager;
         private LobbyUI _lobbyUI;
         private LoadoutEditor _loadoutEditor;
@@ -1005,7 +1008,7 @@ namespace Oxide.Plugins
             {
                 container.Add(new CuiLabel
                 {
-                    Text = { Text = "STORE", FontSize = 24, Align = TextAnchor.MiddleCenter, Color = "1 0.8 0 1" },
+                    Text = { Text = "S T O R E", FontSize = 24, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
                     RectTransform = { AnchorMin = "0.3 0.8", AnchorMax = "0.7 0.9" }
                 }, UI_TAB_CONTAINER);
                 
@@ -1018,70 +1021,214 @@ namespace Oxide.Plugins
                     _plugin._activeSessions[player.userID] = session;
                 }
                 
+                // Token balance display
                 container.Add(new CuiLabel
                 {
-                    Text = { Text = $"Your Tokens: {session.Profile.Tokens}", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0 1 0 1" },
+                    Text = { Text = $"Your Tokens: {session.Profile.Tokens}", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "1 0.6 0 1" },
                     RectTransform = { AnchorMin = "0.3 0.72", AnchorMax = "0.7 0.77" }
                 }, UI_TAB_CONTAINER);
                 
-                // Store items with prices, purchase buttons, and weapon slot indicators
-                var storeItems = new[]
+                // Gun Skins (LEFT COLUMN)
+                var gunSkins = new[]
                 {
-                    new { Name = "AK-47 Neon Skin", Slot = "AK-47", Cost = 500, Id = "3102802323" },
-                    new { Name = "AK-47 Classic Skin", Slot = "AK-47", Cost = 400, Id = "skin_ak47_neon" },
-                    new { Name = "Extended Mag", Slot = "Attachment", Cost = 300, Id = "att_extended_mag" },
-                    new { Name = "Reflex Sight", Slot = "Attachment", Cost = 250, Id = "att_reflex_sight" },
-                    new { Name = "Silencer", Slot = "Attachment", Cost = 400, Id = "att_silencer" }
+                    new { Name = "AK-47 Neon Skin", Cost = 500, Id = "3102802323", ImageId = "ak47_neon" },
+                    new { Name = "AK-47 Classic Skin", Cost = 400, Id = "skin_ak47_neon", ImageId = "ak47_classic" }
                 };
                 
-                for (int i = 0; i < storeItems.Length; i++)
+                // Column Title: GUN SKINS
+                container.Add(new CuiLabel
                 {
-                    var item = storeItems[i];
-                    float yMin = 0.60f - (i * 0.10f);
-                    float yMax = yMin + 0.08f;
+                    Text = { Text = "G U N   S K I N S", FontSize = 16, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.12 0.62", AnchorMax = "0.48 0.67" }
+                }, UI_TAB_CONTAINER);
+                
+                // Gun Skins Items
+                for (int i = 0; i < gunSkins.Length; i++)
+                {
+                    var item = gunSkins[i];
+                    float yMin = 0.52f - (i * 0.15f);
+                    float yMax = yMin + 0.10f;
                     
-                    // Item panel
+                    // Item panel with rounded corners and drop shadow effect
                     container.Add(new CuiPanel
                     {
-                        Image = { Color = "0.2 0.2 0.2 1" },
-                        RectTransform = { AnchorMin = $"0.15 {yMin}", AnchorMax = $"0.85 {yMax}" }
+                        Image = { Color = "0.15 0.15 0.15 0.95" },
+                        RectTransform = { AnchorMin = $"0.12 {yMin}", AnchorMax = $"0.48 {yMax}" }
                     }, UI_TAB_CONTAINER);
                     
-                    // Item name
+                    // Shadow effect (slightly offset darker panel)
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.05 0.05 0.05 0.5" },
+                        RectTransform = { AnchorMin = $"0.121 {yMin - 0.002f}", AnchorMax = $"0.481 {yMax - 0.002f}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // 1-inch preview box with faint outline
+                    string previewBoxName = $"StorePreviewGun_{i}";
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.1 0.1 0.1 1" },
+                        RectTransform = { AnchorMin = $"0.13 {yMin + 0.01f}", AnchorMax = $"0.21 {yMax - 0.01f}" }
+                    }, UI_TAB_CONTAINER, previewBoxName);
+                    
+                    // Faint outline for preview box
+                    container.Add(new CuiElement
+                    {
+                        Parent = previewBoxName,
+                        Components =
+                        {
+                            new CuiImageComponent { Color = "0.3 0.3 0.3 0.5" },
+                            new CuiOutlineComponent { Color = "0.4 0.4 0.4 0.8", Distance = "1 1" },
+                            new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" }
+                        }
+                    });
+                    
+                    // Try to add image from ImageLibrary if available
+                    if (_plugin.ImageLibrary != null && _plugin.ImageLibrary.IsLoaded)
+                    {
+                        string imageId = (string)_plugin.ImageLibrary.Call("GetImage", item.ImageId);
+                        if (!string.IsNullOrEmpty(imageId))
+                        {
+                            container.Add(new CuiElement
+                            {
+                                Parent = previewBoxName,
+                                Components =
+                                {
+                                    new CuiRawImageComponent { Png = imageId },
+                                    new CuiRectTransformComponent { AnchorMin = "0.05 0.05", AnchorMax = "0.95 0.95" }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Item name (white)
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = item.Name, FontSize = 14, Align = TextAnchor.MiddleLeft },
-                        RectTransform = { AnchorMin = $"0.17 {yMin}", AnchorMax = $"0.45 {yMax}" }
+                        Text = { Text = item.Name, FontSize = 13, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
+                        RectTransform = { AnchorMin = $"0.22 {yMin + 0.055f}", AnchorMax = $"0.40 {yMax - 0.01f}" }
                     }, UI_TAB_CONTAINER);
                     
-                    // Item slot/weapon indicator
+                    // Token price (orange)
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = $"[{item.Slot}]", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
-                        RectTransform = { AnchorMin = $"0.46 {yMin}", AnchorMax = $"0.56 {yMax}" }
+                        Text = { Text = $"{item.Cost} Tokens", FontSize = 11, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
+                        RectTransform = { AnchorMin = $"0.22 {yMin + 0.02f}", AnchorMax = $"0.40 {yMin + 0.055f}" }
                     }, UI_TAB_CONTAINER);
                     
-                    // Price
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = $"{item.Cost} Tokens", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "1 0.8 0 1" },
-                        RectTransform = { AnchorMin = $"0.57 {yMin}", AnchorMax = $"0.68 {yMax}" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // Purchase button
-                    string buttonColor = (session != null && session.Profile.Tokens >= item.Cost) ? "0.2 0.8 0.2 1" : "0.5 0.2 0.2 1";
+                    // Sleek BUY button (matte steel-gray with rounded corners)
+                    string buttonColor = (session.Profile.Tokens >= item.Cost) ? "0.35 0.35 0.38 1" : "0.25 0.25 0.25 0.7";
+                    string textColor = (session.Profile.Tokens >= item.Cost) ? "0.95 0.9 0.85 1" : "0.5 0.5 0.5 1";
                     container.Add(new CuiButton
                     {
-                        Button = { Command = $"killadome.purchase {item.Id} {item.Cost}", Color = buttonColor },
-                        Text = { Text = "BUY", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = $"0.70 {yMin + 0.01f}", AnchorMax = $"0.83 {yMax - 0.01f}" }
+                        Button = { Color = buttonColor, Command = $"killadome.purchase {item.Id} {item.Cost}" },
+                        Text = { Text = "BUY", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = textColor },
+                        RectTransform = { AnchorMin = $"0.41 {yMin + 0.025f}", AnchorMax = $"0.47 {yMax - 0.025f}" }
                     }, UI_TAB_CONTAINER);
                 }
                 
-                // Info text
+                // Attachments (RIGHT COLUMN)
+                var attachments = new[]
+                {
+                    new { Name = "Extended Mag", Cost = 300, Id = "att_extended_mag", ImageId = "extended_mag" },
+                    new { Name = "Reflex Sight", Cost = 250, Id = "att_reflex_sight", ImageId = "reflex_sight" },
+                    new { Name = "Silencer", Cost = 400, Id = "att_silencer", ImageId = "silencer" }
+                };
+                
+                // Column Title: ATTACHMENTS
                 container.Add(new CuiLabel
                 {
-                    Text = { Text = "Click BUY to purchase items with Blood Tokens", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                    Text = { Text = "A T T A C H M E N T S", FontSize = 16, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.52 0.62", AnchorMax = "0.88 0.67" }
+                }, UI_TAB_CONTAINER);
+                
+                // Attachments Items
+                for (int i = 0; i < attachments.Length; i++)
+                {
+                    var item = attachments[i];
+                    float yMin = 0.52f - (i * 0.15f);
+                    float yMax = yMin + 0.10f;
+                    
+                    // Item panel with rounded corners and drop shadow effect
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.15 0.15 0.15 0.95" },
+                        RectTransform = { AnchorMin = $"0.52 {yMin}", AnchorMax = $"0.88 {yMax}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // Shadow effect (slightly offset darker panel)
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.05 0.05 0.05 0.5" },
+                        RectTransform = { AnchorMin = $"0.521 {yMin - 0.002f}", AnchorMax = $"0.881 {yMax - 0.002f}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // 1-inch preview box with faint outline
+                    string previewBoxName = $"StorePreviewAtt_{i}";
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.1 0.1 0.1 1" },
+                        RectTransform = { AnchorMin = $"0.53 {yMin + 0.01f}", AnchorMax = $"0.61 {yMax - 0.01f}" }
+                    }, UI_TAB_CONTAINER, previewBoxName);
+                    
+                    // Faint outline for preview box
+                    container.Add(new CuiElement
+                    {
+                        Parent = previewBoxName,
+                        Components =
+                        {
+                            new CuiImageComponent { Color = "0.3 0.3 0.3 0.5" },
+                            new CuiOutlineComponent { Color = "0.4 0.4 0.4 0.8", Distance = "1 1" },
+                            new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" }
+                        }
+                    });
+                    
+                    // Try to add image from ImageLibrary if available
+                    if (_plugin.ImageLibrary != null && _plugin.ImageLibrary.IsLoaded)
+                    {
+                        string imageId = (string)_plugin.ImageLibrary.Call("GetImage", item.ImageId);
+                        if (!string.IsNullOrEmpty(imageId))
+                        {
+                            container.Add(new CuiElement
+                            {
+                                Parent = previewBoxName,
+                                Components =
+                                {
+                                    new CuiRawImageComponent { Png = imageId },
+                                    new CuiRectTransformComponent { AnchorMin = "0.05 0.05", AnchorMax = "0.95 0.95" }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Item name (white)
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = item.Name, FontSize = 13, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.055f}", AnchorMax = $"0.80 {yMax - 0.01f}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // Token price (orange)
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = $"{item.Cost} Tokens", FontSize = 11, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.02f}", AnchorMax = $"0.80 {yMin + 0.055f}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // Sleek BUY button (matte steel-gray with rounded corners)
+                    string buttonColor = (session.Profile.Tokens >= item.Cost) ? "0.35 0.35 0.38 1" : "0.25 0.25 0.25 0.7";
+                    string textColor = (session.Profile.Tokens >= item.Cost) ? "0.95 0.9 0.85 1" : "0.5 0.5 0.5 1";
+                    container.Add(new CuiButton
+                    {
+                        Button = { Color = buttonColor, Command = $"killadome.purchase {item.Id} {item.Cost}" },
+                        Text = { Text = "BUY", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = textColor },
+                        RectTransform = { AnchorMin = $"0.81 {yMin + 0.025f}", AnchorMax = $"0.87 {yMax - 0.025f}" }
+                    }, UI_TAB_CONTAINER);
+                }
+                
+                // Info text at bottom
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "Purchase items with Blood Tokens to enhance your loadout", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
                     RectTransform = { AnchorMin = "0.2 0.08", AnchorMax = "0.8 0.12" }
                 }, UI_TAB_CONTAINER);
             }
