@@ -2218,23 +2218,32 @@ namespace Oxide.Plugins
                     }, UI_TAB_CONTAINER);
                 }
                 
-                // Attachments (RIGHT COLUMN) - All real Rust mod items
+                // Attachments (RIGHT COLUMN) - Both Normal and Alter-Ego versions
                 var attachments = new[]
                 {
-                    // Scopes
-                    new { Name = "Small Scope", Cost = 250, Id = "weapon.mod.small.scope", ImageId = "small_scope" },
-                    new { Name = "8x Scope", Cost = 400, Id = "weapon.mod.8x.scope", ImageId = "8x_scope" },
+                    // Scopes - Normal
+                    new { Name = "Small Scope", Cost = 250, Id = "weapon.mod.small.scope", ImageId = "small_scope", IsAlterEgo = false },
+                    new { Name = "Small Scope AE", Cost = 600, Id = "weapon.mod.small.scope_AE", ImageId = "small_scope_ae", IsAlterEgo = true },
+                    new { Name = "8x Scope", Cost = 400, Id = "weapon.mod.8x.scope", ImageId = "8x_scope", IsAlterEgo = false },
+                    new { Name = "8x Scope AE", Cost = 800, Id = "weapon.mod.8x.scope_AE", ImageId = "8x_scope_ae", IsAlterEgo = true },
                     
-                    // Silencers/Muzzle
-                    new { Name = "Soda Can Silencer", Cost = 150, Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer" },
-                    new { Name = "Oil Filter Silencer", Cost = 200, Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer" },
-                    new { Name = "Silencer", Cost = 400, Id = "weapon.mod.silencer", ImageId = "silencer" },
-                    new { Name = "Muzzle Brake", Cost = 300, Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake" },
-                    new { Name = "Muzzle Boost", Cost = 350, Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost" },
+                    // Underbarrel - Normal
+                    new { Name = "Holo Sight", Cost = 300, Id = "weapon.mod.holosight", ImageId = "holo_sight", IsAlterEgo = false },
+                    new { Name = "Holo Sight AE", Cost = 700, Id = "weapon.mod.holosight_AE", ImageId = "holo_sight_ae", IsAlterEgo = true },
+                    new { Name = "Laser Sight", Cost = 250, Id = "weapon.mod.lasersight", ImageId = "laser_sight", IsAlterEgo = false },
+                    new { Name = "Laser Sight AE", Cost = 650, Id = "weapon.mod.lasersight_AE", ImageId = "laser_sight_ae", IsAlterEgo = true },
                     
-                    // Underbarrel
-                    new { Name = "Laser Sight", Cost = 250, Id = "weapon.mod.lasersight", ImageId = "laser_sight" },
-                    new { Name = "Holo Sight", Cost = 300, Id = "weapon.mod.holosight", ImageId = "holo_sight" }
+                    // Silencers/Muzzle - Normal
+                    new { Name = "Soda Can Silencer", Cost = 150, Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer", IsAlterEgo = false },
+                    new { Name = "Soda Can Silencer AE", Cost = 550, Id = "weapon.mod.sodacansilencer_AE", ImageId = "sodacan_silencer_ae", IsAlterEgo = true },
+                    new { Name = "Oil Filter Silencer", Cost = 200, Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer", IsAlterEgo = false },
+                    new { Name = "Oil Filter Silencer AE", Cost = 600, Id = "weapon.mod.oilfiltersilencer_AE", ImageId = "oilfilter_silencer_ae", IsAlterEgo = true },
+                    new { Name = "Silencer", Cost = 400, Id = "weapon.mod.silencer", ImageId = "silencer", IsAlterEgo = false },
+                    new { Name = "Silencer AE", Cost = 800, Id = "weapon.mod.silencer_AE", ImageId = "silencer_ae", IsAlterEgo = true },
+                    new { Name = "Muzzle Brake", Cost = 300, Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake", IsAlterEgo = false },
+                    new { Name = "Muzzle Brake AE", Cost = 700, Id = "weapon.mod.muzzlebrake_AE", ImageId = "muzzle_brake_ae", IsAlterEgo = true },
+                    new { Name = "Muzzle Boost", Cost = 350, Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost", IsAlterEgo = false },
+                    new { Name = "Muzzle Boost AE", Cost = 750, Id = "weapon.mod.muzzleboost_AE", ImageId = "muzzle_boost_ae", IsAlterEgo = true }
                 };
                 
                 // Column Title: ATTACHMENTS
@@ -2244,12 +2253,12 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.52 0.62", AnchorMax = "0.88 0.67" }
                 }, UI_TAB_CONTAINER);
                 
-                // Attachments Items
+                // Attachments Items - Compact layout for 18 items
                 for (int i = 0; i < attachments.Length; i++)
                 {
                     var item = attachments[i];
-                    float yMin = 0.52f - (i * 0.15f);
-                    float yMax = yMin + 0.10f;
+                    float yMin = 0.60f - (i * 0.08f); // Smaller vertical spacing
+                    float yMax = yMin + 0.07f; // Smaller item height
                     
                     // Item panel with rounded corners and drop shadow effect
                     container.Add(new CuiPanel
@@ -2303,18 +2312,20 @@ namespace Oxide.Plugins
                         }
                     }
                     
-                    // Item name (white)
+                    // Item name with AE badge if applicable
+                    string displayName = item.IsAlterEgo ? $"⚡ {item.Name}" : item.Name;
+                    string nameColor = item.IsAlterEgo ? "1 0.6 0 1" : "1 1 1 1"; // Orange for AE, white for normal
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = item.Name, FontSize = 13, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
-                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.055f}", AnchorMax = $"0.80 {yMax - 0.01f}" }
+                        Text = { Text = displayName, FontSize = 11, Align = TextAnchor.UpperLeft, Color = nameColor },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.04f}", AnchorMax = $"0.80 {yMax - 0.005f}" }
                     }, UI_TAB_CONTAINER);
                     
                     // Token price (orange)
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = $"{item.Cost} Tokens", FontSize = 11, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
-                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.02f}", AnchorMax = $"0.80 {yMin + 0.055f}" }
+                        Text = { Text = $"{item.Cost} Tokens", FontSize = 9, Align = TextAnchor.UpperLeft, Color = "1 0.6 0 1" },
+                        RectTransform = { AnchorMin = $"0.62 {yMin + 0.01f}", AnchorMax = $"0.80 {yMin + 0.04f}" }
                     }, UI_TAB_CONTAINER);
                     
                     // Sleek BUY button (matte steel-gray with rounded corners)
