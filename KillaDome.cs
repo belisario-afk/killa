@@ -19,6 +19,7 @@ using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Newtonsoft.Json;
 using System.IO;
@@ -713,6 +714,22 @@ namespace Oxide.Plugins
             _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
         }
         
+        [ConsoleCommand("killadome.editweapon")]
+        private void CmdEditWeapon(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (player == null || !arg.HasArgs(1)) return;
+            
+            string slot = arg.Args[0].ToLower(); // "primary" or "secondary"
+            if (slot != "primary" && slot != "secondary") return;
+            
+            var session = GetSession(player.userID);
+            if (session == null) return;
+            
+            session.EditingWeaponSlot = slot;
+            _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
+        }
+        
         #endregion
         
         #region Data Models
@@ -724,12 +741,14 @@ namespace Oxide.Plugins
             public DateTime LastAction { get; set; }
             public string SelectedItem { get; set; }
             public bool IsInMatch { get; set; }
+            public string EditingWeaponSlot { get; set; } // "primary" or "secondary"
             
             internal PlayerSession(BasePlayer player, PlayerProfile profile)
             {
                 Player = player;
                 Profile = profile;
                 LastAction = DateTime.UtcNow;
+                EditingWeaponSlot = "primary"; // Default to editing primary
             }
         }
         
@@ -1146,12 +1165,56 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.74 0.68", AnchorMax = "0.86 0.72" }
                 }, UI_TAB_CONTAINER);
                 
-                // NEW SECTION: SKINS & ATTACHMENTS EDITOR
-                // Main container with border
+                // WEAPON SLOT SELECTOR - Shows which weapon is being edited
+                string editingSlot = session.EditingWeaponSlot ?? "primary";
+                string currentWeapon = editingSlot == "primary" ? loadout.Primary : loadout.Secondary;
+                
+                // Selector panel
                 container.Add(new CuiPanel
                 {
                     Image = { Color = "0.11 0.11 0.11 0.95" },
-                    RectTransform = { AnchorMin = "0.12 0.15", AnchorMax = "0.88 0.65" }
+                    RectTransform = { AnchorMin = "0.12 0.60", AnchorMax = "0.88 0.65" }
+                }, UI_TAB_CONTAINER);
+                
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "E D I T I N G", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                    RectTransform = { AnchorMin = "0.12 0.625", AnchorMax = "0.30 0.65" }
+                }, UI_TAB_CONTAINER);
+                
+                // PRIMARY button
+                string primaryColor = editingSlot == "primary" ? "1 0.54 0 1" : "0.25 0.25 0.25 1";
+                string primaryTextColor = editingSlot == "primary" ? "1 1 1 1" : "0.7 0.7 0.7 1";
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.editweapon primary", Color = primaryColor },
+                    Text = { Text = "PRIMARY", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = primaryTextColor },
+                    RectTransform = { AnchorMin = "0.32 0.605", AnchorMax = "0.48 0.645" }
+                }, UI_TAB_CONTAINER);
+                
+                // SECONDARY button
+                string secondaryColor = editingSlot == "secondary" ? "1 0.54 0 1" : "0.25 0.25 0.25 1";
+                string secondaryTextColor = editingSlot == "secondary" ? "1 1 1 1" : "0.7 0.7 0.7 1";
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.editweapon secondary", Color = secondaryColor },
+                    Text = { Text = "SECONDARY", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = secondaryTextColor },
+                    RectTransform = { AnchorMin = "0.52 0.605", AnchorMax = "0.68 0.645" }
+                }, UI_TAB_CONTAINER);
+                
+                // Show current weapon being edited
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = $"[ {currentWeapon.ToUpper()} ]", FontSize = 14, Align = TextAnchor.MiddleCenter, Color = "1 0.54 0 1" },
+                    RectTransform = { AnchorMin = "0.70 0.605", AnchorMax = "0.88 0.645" }
+                }, UI_TAB_CONTAINER);
+                
+                // NEW SECTION: SKINS & ATTACHMENTS EDITOR
+                // Main container with border (adjusted height to accommodate weapon selector)
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "0.11 0.11 0.11 0.95" },
+                    RectTransform = { AnchorMin = "0.12 0.15", AnchorMax = "0.88 0.58" }
                 }, UI_TAB_CONTAINER, "LoadoutEditorMain");
                 
                 // LEFT PANEL - SKINS
@@ -1168,12 +1231,17 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.15 0.915", AnchorMax = "0.35 0.918" }
                 }, "LoadoutEditorMain");
                 
-                // Available skins grid
-                var availableSkins = new[]
+                // Available skins grid - filter by currently edited weapon
+                var allSkins = new[]
                 {
                     new { Name = "AK-47 Neon", Id = "3102802323", ImageId = "ak47_neon", Weapon = "ak47" },
                     new { Name = "AK-47 Classic", Id = "skin_ak47_neon", ImageId = "ak47_classic", Weapon = "ak47" },
+                    new { Name = "M249 Chrome", Id = "skin_m249_chrome", ImageId = "m249_chrome", Weapon = "m249" },
+                    new { Name = "Pistol Black", Id = "skin_pistol_black", ImageId = "pistol_black", Weapon = "pistol" },
                 };
+                
+                // Filter skins for the currently edited weapon
+                var availableSkins = allSkins.Where(s => s.Weapon == currentWeapon).ToArray();
                 
                 for (int i = 0; i < availableSkins.Length; i++)
                 {
@@ -1263,7 +1331,7 @@ namespace Oxide.Plugins
                     {
                         container.Add(new CuiButton
                         {
-                            Button = { Command = $"killadome.applyskin primary {skin.Id}", Color = "0.35 0.35 0.38 1" },
+                            Button = { Command = $"killadome.applyskin {editingSlot} {skin.Id}", Color = "0.35 0.35 0.38 1" },
                             Text = { Text = "APPLY", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
                             RectTransform = { AnchorMin = $"0.36 {yMin + 0.05f}", AnchorMax = $"0.43 {yMin + 0.12f}" }
                         }, "LoadoutEditorMain");
@@ -1315,7 +1383,10 @@ namespace Oxide.Plugins
                     
                     // Check ownership (both skins and attachments stored in OwnedSkins list)
                     bool isOwned = session.Profile.OwnedSkins.Contains(att.Id);
-                    bool isEquipped = loadout.PrimaryAttachments.TryGetValue(att.Slot, out string equippedAtt) && equippedAtt == att.Id;
+                    
+                    // Check if equipped on the currently edited weapon
+                    var attachments = editingSlot == "primary" ? loadout.PrimaryAttachments : loadout.SecondaryAttachments;
+                    bool isEquipped = attachments.TryGetValue(att.Slot, out string equippedAtt) && equippedAtt == att.Id;
                     
                     // Attachment tile
                     string tileColor = isOwned ? "0.12 0.12 0.12 1" : "0.12 0.12 0.12 0.5";
@@ -1402,7 +1473,7 @@ namespace Oxide.Plugins
                     {
                         container.Add(new CuiButton
                         {
-                            Button = { Command = $"killadome.applyattachment primary {att.Slot} {att.Id}", Color = "0.35 0.35 0.38 1" },
+                            Button = { Command = $"killadome.applyattachment {editingSlot} {att.Slot} {att.Id}", Color = "0.35 0.35 0.38 1" },
                             Text = { Text = "APPLY", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
                             RectTransform = { AnchorMin = $"0.86 {yMin + 0.07f}", AnchorMax = $"0.93 {yMin + 0.14f}" }
                         }, "LoadoutEditorMain");
