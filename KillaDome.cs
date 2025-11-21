@@ -299,6 +299,31 @@ namespace Oxide.Plugins
                 }
             }
             
+            // Apply attachments if exists
+            if (attachments != null && attachments.Count > 0)
+            {
+                var heldEntity = item.GetHeldEntity() as BaseProjectile;
+                if (heldEntity != null)
+                {
+                    foreach (var attachmentEntry in attachments)
+                    {
+                        string attachmentId = attachmentEntry.Value;
+                        if (!string.IsNullOrEmpty(attachmentId))
+                        {
+                            var attachmentItem = ItemManager.CreateByName(attachmentId, 1);
+                            if (attachmentItem != null)
+                            {
+                                // Add attachment to weapon's content
+                                if (!item.contents.itemList.Contains(attachmentItem))
+                                {
+                                    attachmentItem.MoveToContainer(item.contents);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Give item to player
             player.inventory.GiveItem(item);
             
@@ -1358,12 +1383,12 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.62 0.915", AnchorMax = "0.88 0.918" }
                 }, "LoadoutEditorMain");
                 
-                // Attachment category tabs
-                string[] categories = { "OPTICS", "BARREL", "MAGAZINE", "GRIP" };
+                // Attachment category tabs (3 tabs: Scopes, Silencers/Muzzle, Underbarrel)
+                string[] categories = { "SCOPES", "SILENCERS", "UNDERBARREL" };
                 for (int i = 0; i < categories.Length; i++)
                 {
-                    float xMin = 0.52f + (i * 0.11f);
-                    float xMax = xMin + 0.10f;
+                    float xMin = 0.52f + (i * 0.15f);
+                    float xMax = xMin + 0.14f;
                     
                     container.Add(new CuiButton
                     {
@@ -1373,12 +1398,23 @@ namespace Oxide.Plugins
                     }, "LoadoutEditorMain");
                 }
                 
-                // Available attachments
+                // Available attachments with actual Rust mod item short names
                 var availableAttachments = new[]
                 {
-                    new { Name = "Extended Mag", Id = "att_extended_mag", ImageId = "extended_mag", Slot = "magazine", Desc = "Increases magazine capacity" },
-                    new { Name = "Reflex Sight", Id = "att_reflex_sight", ImageId = "reflex_sight", Slot = "optic", Desc = "Improved target acquisition" },
-                    new { Name = "Silencer", Id = "att_silencer", ImageId = "silencer", Slot = "barrel", Desc = "Reduces weapon noise" },
+                    // Scopes
+                    new { Name = "Small Scope", Id = "weapon.mod.small.scope", ImageId = "small_scope", Category = "scopes", Desc = "Simple 4x scope" },
+                    new { Name = "8x Scope", Id = "weapon.mod.8x.scope", ImageId = "8x_scope", Category = "scopes", Desc = "Long range 8x scope" },
+                    
+                    // Silencers/Muzzle
+                    new { Name = "Soda Can Silencer", Id = "weapon.mod.sodacansilencer", ImageId = "sodacan_silencer", Category = "silencers", Desc = "Improvised silencer" },
+                    new { Name = "Oil Filter Silencer", Id = "weapon.mod.oilfiltersilencer", ImageId = "oilfilter_silencer", Category = "silencers", Desc = "Makeshift silencer" },
+                    new { Name = "Silencer", Id = "weapon.mod.silencer", ImageId = "silencer", Category = "silencers", Desc = "Professional silencer" },
+                    new { Name = "Muzzle Brake", Id = "weapon.mod.muzzlebrake", ImageId = "muzzle_brake", Category = "silencers", Desc = "Reduces recoil" },
+                    new { Name = "Muzzle Boost", Id = "weapon.mod.muzzleboost", ImageId = "muzzle_boost", Category = "silencers", Desc = "Increases fire rate" },
+                    
+                    // Underbarrel
+                    new { Name = "Laser Sight", Id = "weapon.mod.lasersight", ImageId = "laser_sight", Category = "underbarrel", Desc = "Improved hip fire" },
+                    new { Name = "Holo Sight", Id = "weapon.mod.holosight", ImageId = "holo_sight", Category = "underbarrel", Desc = "Red dot sight" },
                 };
                 
                 for (int i = 0; i < availableAttachments.Length; i++)
@@ -1390,9 +1426,9 @@ namespace Oxide.Plugins
                     // Check ownership (both skins and attachments stored in OwnedSkins list)
                     bool isOwned = session.Profile.OwnedSkins.Contains(att.Id);
                     
-                    // Check if equipped on the currently edited weapon
+                    // Check if equipped on the currently edited weapon (stored by attachment ID)
                     var attachments = editingSlot == "primary" ? loadout.PrimaryAttachments : loadout.SecondaryAttachments;
-                    bool isEquipped = attachments.TryGetValue(att.Slot, out string equippedAtt) && equippedAtt == att.Id;
+                    bool isEquipped = attachments.ContainsValue(att.Id);
                     
                     // Attachment tile
                     string tileColor = isOwned ? "0.12 0.12 0.12 1" : "0.12 0.12 0.12 0.5";
@@ -1479,7 +1515,7 @@ namespace Oxide.Plugins
                     {
                         container.Add(new CuiButton
                         {
-                            Button = { Command = $"killadome.applyattachment {editingSlot} {att.Slot} {att.Id}", Color = "0.35 0.35 0.38 1" },
+                            Button = { Command = $"killadome.applyattachment {editingSlot} {att.Category} {att.Id}", Color = "0.35 0.35 0.38 1" },
                             Text = { Text = "APPLY", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
                             RectTransform = { AnchorMin = $"0.86 {yMin + 0.07f}", AnchorMax = $"0.93 {yMin + 0.14f}" }
                         }, "LoadoutEditorMain");
