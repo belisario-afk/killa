@@ -651,7 +651,7 @@ namespace Oxide.Plugins
             var session = GetSession(player.userID);
             if (session == null || session.Profile.Loadouts.Count == 0) return;
             
-            // Check if player owns the attachment
+            // Check if player owns the attachment (stored in OwnedSkins list for simplicity)
             if (!session.Profile.OwnedSkins.Contains(attachmentId))
             {
                 SendReply(player, "You don't own this attachment!");
@@ -711,9 +711,6 @@ namespace Oxide.Plugins
             // This is just for UI feedback - category selection
             // In a full implementation, this would filter the attachments shown
             _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
-        }
-            _saveManager.SavePlayerProfile(session.Profile);
-            LogDebug($"Player {player.displayName} changed {slot} weapon to {newWeapon}");
         }
         
         #endregion
@@ -1316,6 +1313,7 @@ namespace Oxide.Plugins
                     float yMin = 0.70f - (i * 0.22f);
                     float yMax = yMin + 0.18f;
                     
+                    // Check ownership (both skins and attachments stored in OwnedSkins list)
                     bool isOwned = session.Profile.OwnedSkins.Contains(att.Id);
                     bool isEquipped = loadout.PrimaryAttachments.TryGetValue(att.Slot, out string equippedAtt) && equippedAtt == att.Id;
                     
