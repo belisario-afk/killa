@@ -249,6 +249,65 @@ namespace Oxide.Plugins
         {
             if (player == null || !player.IsConnected) return;
             player.Teleport(_config.ArenaSpawnPosition);
+            
+            // Apply loadout when entering arena
+            ApplyLoadout(player);
+        }
+        
+        private void ApplyLoadout(BasePlayer player)
+        {
+            var session = GetSession(player.userID);
+            if (session == null || session.Profile.Loadouts.Count == 0) return;
+            
+            var loadout = session.Profile.Loadouts[0];
+            
+            // Strip existing items
+            player.inventory.Strip();
+            
+            // Give primary weapon
+            GiveWeapon(player, loadout.Primary, loadout.PrimaryAttachments, loadout.Skins);
+            
+            // Give secondary weapon
+            GiveWeapon(player, loadout.Secondary, loadout.SecondaryAttachments, loadout.Skins);
+            
+            LogDebug($"Applied loadout to {player.displayName}");
+        }
+        
+        private void GiveWeapon(BasePlayer player, string weaponName, Dictionary<string, string> attachments, Dictionary<string, string> skins)
+        {
+            if (string.IsNullOrEmpty(weaponName)) return;
+            
+            // Map weapon names to item short names
+            string itemName = weaponName switch
+            {
+                "ak47" => "rifle.ak",
+                "m249" => "lmg.m249",
+                "pistol" => "pistol.semiauto",
+                _ => "rifle.ak"
+            };
+            
+            var item = ItemManager.CreateByName(itemName, 1);
+            if (item == null) return;
+            
+            // Apply skin if exists
+            if (skins != null && skins.TryGetValue(weaponName, out string skinId))
+            {
+                if (ulong.TryParse(skinId, out ulong skin))
+                {
+                    item.skin = skin;
+                }
+            }
+            
+            // Give item to player
+            player.inventory.GiveItem(item);
+            
+            // Give ammo
+            string ammoType = weaponName == "pistol" ? "ammo.pistol" : "ammo.rifle";
+            var ammo = ItemManager.CreateByName(ammoType, 250);
+            if (ammo != null)
+            {
+                player.inventory.GiveItem(ammo);
+            }
         }
         
         private void AutoSaveAllPlayers()
@@ -537,6 +596,79 @@ namespace Oxide.Plugins
             }
         }
         
+        [ConsoleCommand("killadome.applyskin")]
+        private void CmdApplySkin(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (player == null || !arg.HasArgs(2)) return;
+            
+            if (!_antiExploit.CheckRateLimit(player.userID))
+            {
+                SendReply(player, "Please slow down!");
+                return;
+            }
+            
+            string weapon = arg.Args[0]; // "primary" or "secondary"
+            string skinId = arg.Args[1];
+            
+            var session = GetSession(player.userID);
+            if (session == null || session.Profile.Loadouts.Count == 0) return;
+            
+            // Check if player owns the skin
+            if (!session.Profile.OwnedSkins.Contains(skinId))
+            {
+                SendReply(player, "You don't own this skin!");
+                return;
+            }
+            
+            var loadout = session.Profile.Loadouts[0];
+            string weaponName = weapon == "primary" ? loadout.Primary : loadout.Secondary;
+            
+            // Apply skin to weapon
+            loadout.Skins[weaponName] = skinId;
+            _saveManager.SavePlayerProfile(session.Profile);
+            
+            SendReply(player, $"Skin applied to {weaponName}!");
+            _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
+        }
+        
+        [ConsoleCommand("killadome.applyattachment")]
+        private void CmdApplyAttachment(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (player == null || !arg.HasArgs(3)) return;
+            
+            if (!_antiExploit.CheckRateLimit(player.userID))
+            {
+                SendReply(player, "Please slow down!");
+                return;
+            }
+            
+            string weapon = arg.Args[0]; // "primary" or "secondary"
+            string attachmentSlot = arg.Args[1]; // "optic", "barrel", "magazine", "grip"
+            string attachmentId = arg.Args[2];
+            
+            var session = GetSession(player.userID);
+            if (session == null || session.Profile.Loadouts.Count == 0) return;
+            
+            // Check if player owns the attachment
+            if (!session.Profile.OwnedSkins.Contains(attachmentId))
+            {
+                SendReply(player, "You don't own this attachment!");
+                return;
+            }
+            
+            var loadout = session.Profile.Loadouts[0];
+            var attachments = weapon == "primary" ? loadout.PrimaryAttachments : loadout.SecondaryAttachments;
+            
+            // Apply attachment
+            attachments[attachmentSlot] = attachmentId;
+            _saveManager.SavePlayerProfile(session.Profile);
+            
+            SendReply(player, $"Attachment applied!");
+            _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
+        }
+        
         #endregion
         
         #region Helper Methods
@@ -566,6 +698,20 @@ namespace Oxide.Plugins
                 loadout.Secondary = newWeapon;
             }
             
+            _saveManager.SavePlayerProfile(session.Profile);
+            LogDebug($"Player {player.displayName} changed {slot} weapon to {newWeapon}");
+        }
+        
+        [ConsoleCommand("killadome.attachcat")]
+        private void CmdAttachmentCategory(ConsoleSystem.Arg arg)
+        {
+            var player = arg.Player();
+            if (player == null || !arg.HasArgs(1)) return;
+            
+            // This is just for UI feedback - category selection
+            // In a full implementation, this would filter the attachments shown
+            _lobbyUI.ShowLobbyUIWithTab(player, "loadouts");
+        }
             _saveManager.SavePlayerProfile(session.Profile);
             LogDebug($"Player {player.displayName} changed {slot} weapon to {newWeapon}");
         }
@@ -892,10 +1038,18 @@ namespace Oxide.Plugins
             
             private void ShowLoadoutsTab(CuiElementContainer container, BasePlayer player)
             {
+                // Title with rust orange color and letter spacing
                 container.Add(new CuiLabel
                 {
-                    Text = { Text = "LOADOUT EDITOR", FontSize = 24, Align = TextAnchor.MiddleCenter, Color = "1 0.8 0 1" },
-                    RectTransform = { AnchorMin = "0.3 0.8", AnchorMax = "0.7 0.9" }
+                    Text = { Text = "L O A D O U T   E D I T O R", FontSize = 24, Align = TextAnchor.MiddleCenter, Color = "1 0.54 0 1" },
+                    RectTransform = { AnchorMin = "0.3 0.85", AnchorMax = "0.7 0.92" }
+                }, UI_TAB_CONTAINER);
+                
+                // Thin orange underline with glow effect
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "1 0.54 0 0.8" },
+                    RectTransform = { AnchorMin = "0.35 0.845", AnchorMax = "0.65 0.847" }
                 }, UI_TAB_CONTAINER);
                 
                 var session = _plugin.GetSession(player.userID);
@@ -916,91 +1070,352 @@ namespace Oxide.Plugins
                         Primary = "ak47",
                         Secondary = "pistol",
                         PrimaryAttachments = new Dictionary<string, string>(),
+                        SecondaryAttachments = new Dictionary<string, string>(),
                         Skins = new Dictionary<string, string>()
                     });
                 }
                 
                 var loadout = session.Profile.Loadouts[0];
-                    
-                    // PRIMARY WEAPON SECTION
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = "PRIMARY WEAPON", FontSize = 16, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.15 0.65", AnchorMax = "0.4 0.7" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // Primary weapon display panel
-                    container.Add(new CuiPanel
-                    {
-                        Image = { Color = "0.2 0.2 0.2 1" },
-                        RectTransform = { AnchorMin = "0.15 0.45", AnchorMax = "0.4 0.63" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // Current primary weapon text
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = loadout.Primary.ToUpper(), FontSize = 18, Align = TextAnchor.MiddleCenter, Color = "0 1 0 1" },
-                        RectTransform = { AnchorMin = "0.15 0.45", AnchorMax = "0.4 0.63" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // PREV button for primary
-                    container.Add(new CuiButton
-                    {
-                        Button = { Command = "killadome.weapon.prev primary", Color = "0.3 0.3 0.3 1" },
-                        Text = { Text = "◄ PREV", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.15 0.38", AnchorMax = "0.25 0.43" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // NEXT button for primary
-                    container.Add(new CuiButton
-                    {
-                        Button = { Command = "killadome.weapon.next primary", Color = "0.3 0.3 0.3 1" },
-                        Text = { Text = "NEXT ►", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.3 0.38", AnchorMax = "0.4 0.43" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // SECONDARY WEAPON SECTION
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = "SECONDARY WEAPON", FontSize = 16, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.55 0.65", AnchorMax = "0.85 0.7" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // Secondary weapon display panel
-                    container.Add(new CuiPanel
-                    {
-                        Image = { Color = "0.2 0.2 0.2 1" },
-                        RectTransform = { AnchorMin = "0.55 0.45", AnchorMax = "0.85 0.63" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // Current secondary weapon text
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = loadout.Secondary.ToUpper(), FontSize = 18, Align = TextAnchor.MiddleCenter, Color = "0 1 0 1" },
-                        RectTransform = { AnchorMin = "0.55 0.45", AnchorMax = "0.85 0.63" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // PREV button for secondary
-                    container.Add(new CuiButton
-                    {
-                        Button = { Command = "killadome.weapon.prev secondary", Color = "0.3 0.3 0.3 1" },
-                        Text = { Text = "◄ PREV", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.55 0.38", AnchorMax = "0.65 0.43" }
-                    }, UI_TAB_CONTAINER);
-                    
-                    // NEXT button for secondary
-                    container.Add(new CuiButton
-                    {
-                        Button = { Command = "killadome.weapon.next secondary", Color = "0.3 0.3 0.3 1" },
-                        Text = { Text = "NEXT ►", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = "0.75 0.38", AnchorMax = "0.85 0.43" }
-                    }, UI_TAB_CONTAINER);
-                    
-                // Info section
+                
+                // PRIMARY WEAPON SECTION (Left, improved)
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "0.11 0.11 0.11 0.95" },
+                    RectTransform = { AnchorMin = "0.12 0.67", AnchorMax = "0.48 0.82" }
+                }, UI_TAB_CONTAINER);
+                
                 container.Add(new CuiLabel
                 {
-                    Text = { Text = "Use PREV/NEXT buttons to cycle through weapons", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
-                    RectTransform = { AnchorMin = "0.2 0.25", AnchorMax = "0.8 0.3" }
+                    Text = { Text = "P R I M A R Y", FontSize = 14, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.12 0.79", AnchorMax = "0.48 0.82" }
+                }, UI_TAB_CONTAINER);
+                
+                // Current primary weapon with larger text
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = loadout.Primary.ToUpper(), FontSize = 20, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.12 0.72", AnchorMax = "0.48 0.78" }
+                }, UI_TAB_CONTAINER);
+                
+                // PREV button for primary
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.weapon.prev primary", Color = "0.35 0.35 0.38 1" },
+                    Text = { Text = "◄ PREV", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.14 0.68", AnchorMax = "0.26 0.72" }
+                }, UI_TAB_CONTAINER);
+                
+                // NEXT button for primary
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.weapon.next primary", Color = "0.35 0.35 0.38 1" },
+                    Text = { Text = "NEXT ►", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.34 0.68", AnchorMax = "0.46 0.72" }
+                }, UI_TAB_CONTAINER);
+                
+                // SECONDARY WEAPON SECTION (Right, improved)
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "0.11 0.11 0.11 0.95" },
+                    RectTransform = { AnchorMin = "0.52 0.67", AnchorMax = "0.88 0.82" }
+                }, UI_TAB_CONTAINER);
+                
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "S E C O N D A R Y", FontSize = 14, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.52 0.79", AnchorMax = "0.88 0.82" }
+                }, UI_TAB_CONTAINER);
+                
+                // Current secondary weapon
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = loadout.Secondary.ToUpper(), FontSize = 20, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.52 0.72", AnchorMax = "0.88 0.78" }
+                }, UI_TAB_CONTAINER);
+                
+                // PREV button for secondary
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.weapon.prev secondary", Color = "0.35 0.35 0.38 1" },
+                    Text = { Text = "◄ PREV", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.54 0.68", AnchorMax = "0.66 0.72" }
+                }, UI_TAB_CONTAINER);
+                
+                // NEXT button for secondary
+                container.Add(new CuiButton
+                {
+                    Button = { Command = "killadome.weapon.next secondary", Color = "0.35 0.35 0.38 1" },
+                    Text = { Text = "NEXT ►", FontSize = 11, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.74 0.68", AnchorMax = "0.86 0.72" }
+                }, UI_TAB_CONTAINER);
+                
+                // NEW SECTION: SKINS & ATTACHMENTS EDITOR
+                // Main container with border
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "0.11 0.11 0.11 0.95" },
+                    RectTransform = { AnchorMin = "0.12 0.15", AnchorMax = "0.88 0.65" }
+                }, UI_TAB_CONTAINER, "LoadoutEditorMain");
+                
+                // LEFT PANEL - SKINS
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "S K I N S", FontSize = 16, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.02 0.92", AnchorMax = "0.48 0.97" }
+                }, "LoadoutEditorMain");
+                
+                // Orange underline for SKINS
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "1 0.54 0 0.8" },
+                    RectTransform = { AnchorMin = "0.15 0.915", AnchorMax = "0.35 0.918" }
+                }, "LoadoutEditorMain");
+                
+                // Available skins grid
+                var availableSkins = new[]
+                {
+                    new { Name = "AK-47 Neon", Id = "3102802323", ImageId = "ak47_neon", Weapon = "ak47" },
+                    new { Name = "AK-47 Classic", Id = "skin_ak47_neon", ImageId = "ak47_classic", Weapon = "ak47" },
+                };
+                
+                for (int i = 0; i < availableSkins.Length; i++)
+                {
+                    var skin = availableSkins[i];
+                    float yMin = 0.70f - (i * 0.22f);
+                    float yMax = yMin + 0.18f;
+                    
+                    bool isOwned = session.Profile.OwnedSkins.Contains(skin.Id);
+                    bool isEquipped = loadout.Skins.TryGetValue(skin.Weapon, out string equippedSkin) && equippedSkin == skin.Id;
+                    
+                    // Skin tile
+                    string tileColor = isOwned ? "0.12 0.12 0.12 1" : "0.12 0.12 0.12 0.5";
+                    string borderColor = isEquipped ? "1 0.54 0 1" : "0.15 0.15 0.15 1";
+                    
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = tileColor },
+                        RectTransform = { AnchorMin = $"0.05 {yMin}", AnchorMax = $"0.45 {yMax}" }
+                    }, "LoadoutEditorMain");
+                    
+                    // Border for selected/equipped
+                    if (isEquipped)
+                    {
+                        container.Add(new CuiPanel
+                        {
+                            Image = { Color = borderColor },
+                            RectTransform = { AnchorMin = $"0.049 {yMin - 0.002f}", AnchorMax = $"0.451 {yMax + 0.002f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    
+                    // Preview box
+                    string previewBoxName = $"SkinPreview_{i}";
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.08 0.08 0.08 1" },
+                        RectTransform = { AnchorMin = $"0.07 {yMin + 0.02f}", AnchorMax = $"0.17 {yMax - 0.02f}" }
+                    }, "LoadoutEditorMain", previewBoxName);
+                    
+                    // Try to add image from ImageLibrary
+                    if (_plugin.ImageLibrary != null && _plugin.ImageLibrary.IsLoaded && isOwned)
+                    {
+                        string imageId = (string)_plugin.ImageLibrary.Call("GetImage", skin.ImageId);
+                        if (!string.IsNullOrEmpty(imageId))
+                        {
+                            container.Add(new CuiElement
+                            {
+                                Parent = previewBoxName,
+                                Components =
+                                {
+                                    new CuiRawImageComponent { Png = imageId },
+                                    new CuiRectTransformComponent { AnchorMin = "0.05 0.05", AnchorMax = "0.95 0.95" }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Skin name
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = skin.Name, FontSize = 12, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
+                        RectTransform = { AnchorMin = $"0.19 {yMin + 0.10f}", AnchorMax = $"0.40 {yMax - 0.02f}" }
+                    }, "LoadoutEditorMain");
+                    
+                    // Ownership badge
+                    if (isOwned)
+                    {
+                        string badgeText = isEquipped ? "EQUIPPED" : "OWNED";
+                        string badgeColor = isEquipped ? "0.3 1 0.3 1" : "0.3 1 0.3 1";
+                        container.Add(new CuiLabel
+                        {
+                            Text = { Text = badgeText, FontSize = 9, Align = TextAnchor.UpperLeft, Color = badgeColor },
+                            RectTransform = { AnchorMin = $"0.19 {yMin + 0.04f}", AnchorMax = $"0.35 {yMin + 0.09f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    else
+                    {
+                        // LOCKED badge
+                        container.Add(new CuiLabel
+                        {
+                            Text = { Text = "LOCKED", FontSize = 9, Align = TextAnchor.UpperLeft, Color = "1 0.3 0.3 1" },
+                            RectTransform = { AnchorMin = $"0.19 {yMin + 0.04f}", AnchorMax = $"0.35 {yMin + 0.09f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    
+                    // Apply button
+                    if (isOwned && !isEquipped)
+                    {
+                        container.Add(new CuiButton
+                        {
+                            Button = { Command = $"killadome.applyskin primary {skin.Id}", Color = "0.35 0.35 0.38 1" },
+                            Text = { Text = "APPLY", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                            RectTransform = { AnchorMin = $"0.36 {yMin + 0.05f}", AnchorMax = $"0.43 {yMin + 0.12f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                }
+                
+                // RIGHT PANEL - ATTACHMENTS
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "A T T A C H M E N T S", FontSize = 16, Align = TextAnchor.UpperCenter, Color = "1 1 1 1" },
+                    RectTransform = { AnchorMin = "0.52 0.92", AnchorMax = "0.98 0.97" }
+                }, "LoadoutEditorMain");
+                
+                // Orange underline for ATTACHMENTS
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = "1 0.54 0 0.8" },
+                    RectTransform = { AnchorMin = "0.62 0.915", AnchorMax = "0.88 0.918" }
+                }, "LoadoutEditorMain");
+                
+                // Attachment category tabs
+                string[] categories = { "OPTICS", "BARREL", "MAGAZINE", "GRIP" };
+                for (int i = 0; i < categories.Length; i++)
+                {
+                    float xMin = 0.52f + (i * 0.11f);
+                    float xMax = xMin + 0.10f;
+                    
+                    container.Add(new CuiButton
+                    {
+                        Button = { Command = $"killadome.attachcat {categories[i].ToLower()}", Color = "0.2 0.2 0.2 0.8" },
+                        Text = { Text = categories[i], FontSize = 9, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                        RectTransform = { AnchorMin = $"{xMin} 0.87", AnchorMax = $"{xMax} 0.91" }
+                    }, "LoadoutEditorMain");
+                }
+                
+                // Available attachments
+                var availableAttachments = new[]
+                {
+                    new { Name = "Extended Mag", Id = "att_extended_mag", ImageId = "extended_mag", Slot = "magazine", Desc = "Increases magazine capacity" },
+                    new { Name = "Reflex Sight", Id = "att_reflex_sight", ImageId = "reflex_sight", Slot = "optic", Desc = "Improved target acquisition" },
+                    new { Name = "Silencer", Id = "att_silencer", ImageId = "silencer", Slot = "barrel", Desc = "Reduces weapon noise" },
+                };
+                
+                for (int i = 0; i < availableAttachments.Length; i++)
+                {
+                    var att = availableAttachments[i];
+                    float yMin = 0.70f - (i * 0.22f);
+                    float yMax = yMin + 0.18f;
+                    
+                    bool isOwned = session.Profile.OwnedSkins.Contains(att.Id);
+                    bool isEquipped = loadout.PrimaryAttachments.TryGetValue(att.Slot, out string equippedAtt) && equippedAtt == att.Id;
+                    
+                    // Attachment tile
+                    string tileColor = isOwned ? "0.12 0.12 0.12 1" : "0.12 0.12 0.12 0.5";
+                    
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = tileColor },
+                        RectTransform = { AnchorMin = $"0.55 {yMin}", AnchorMax = $"0.95 {yMax}" }
+                    }, "LoadoutEditorMain");
+                    
+                    // Border for equipped
+                    if (isEquipped)
+                    {
+                        container.Add(new CuiPanel
+                        {
+                            Image = { Color = "1 0.54 0 1" },
+                            RectTransform = { AnchorMin = $"0.549 {yMin - 0.002f}", AnchorMax = $"0.951 {yMax + 0.002f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    
+                    // Preview box
+                    string previewBoxName = $"AttPreview_{i}";
+                    container.Add(new CuiPanel
+                    {
+                        Image = { Color = "0.08 0.08 0.08 1" },
+                        RectTransform = { AnchorMin = $"0.57 {yMin + 0.02f}", AnchorMax = $"0.67 {yMax - 0.02f}" }
+                    }, "LoadoutEditorMain", previewBoxName);
+                    
+                    // Try to add image from ImageLibrary
+                    if (_plugin.ImageLibrary != null && _plugin.ImageLibrary.IsLoaded && isOwned)
+                    {
+                        string imageId = (string)_plugin.ImageLibrary.Call("GetImage", att.ImageId);
+                        if (!string.IsNullOrEmpty(imageId))
+                        {
+                            container.Add(new CuiElement
+                            {
+                                Parent = previewBoxName,
+                                Components =
+                                {
+                                    new CuiRawImageComponent { Png = imageId },
+                                    new CuiRectTransformComponent { AnchorMin = "0.05 0.05", AnchorMax = "0.95 0.95" }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Attachment name
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = att.Name, FontSize = 12, Align = TextAnchor.UpperLeft, Color = "1 1 1 1" },
+                        RectTransform = { AnchorMin = $"0.69 {yMin + 0.10f}", AnchorMax = $"0.90 {yMax - 0.02f}" }
+                    }, "LoadoutEditorMain");
+                    
+                    // Description
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = att.Desc, FontSize = 8, Align = TextAnchor.UpperLeft, Color = "0.7 0.7 0.7 1" },
+                        RectTransform = { AnchorMin = $"0.69 {yMin + 0.04f}", AnchorMax = $"0.93 {yMin + 0.10f}" }
+                    }, "LoadoutEditorMain");
+                    
+                    // Ownership badge
+                    if (isOwned)
+                    {
+                        string badgeText = isEquipped ? "EQUIPPED" : "OWNED";
+                        string badgeColor = isEquipped ? "0.3 1 0.3 1" : "0.3 1 0.3 1";
+                        container.Add(new CuiLabel
+                        {
+                            Text = { Text = badgeText, FontSize = 9, Align = TextAnchor.UpperLeft, Color = badgeColor },
+                            RectTransform = { AnchorMin = $"0.69 {yMin + 0.01f}", AnchorMax = $"0.85 {yMin + 0.04f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    else
+                    {
+                        // LOCKED badge
+                        container.Add(new CuiLabel
+                        {
+                            Text = { Text = "LOCKED", FontSize = 9, Align = TextAnchor.UpperLeft, Color = "1 0.3 0.3 1" },
+                            RectTransform = { AnchorMin = $"0.69 {yMin + 0.01f}", AnchorMax = $"0.85 {yMin + 0.04f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                    
+                    // Apply button
+                    if (isOwned && !isEquipped)
+                    {
+                        container.Add(new CuiButton
+                        {
+                            Button = { Command = $"killadome.applyattachment primary {att.Slot} {att.Id}", Color = "0.35 0.35 0.38 1" },
+                            Text = { Text = "APPLY", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "1 1 1 1" },
+                            RectTransform = { AnchorMin = $"0.86 {yMin + 0.07f}", AnchorMax = $"0.93 {yMin + 0.14f}" }
+                        }, "LoadoutEditorMain");
+                    }
+                }
+                
+                // Bottom help text
+                container.Add(new CuiLabel
+                {
+                    Text = { Text = "Select a skin or attachment to equip it on your current weapon", FontSize = 10, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                    RectTransform = { AnchorMin = "0.2 0.10", AnchorMax = "0.8 0.14" }
                 }, UI_TAB_CONTAINER);
             }
             
