@@ -1018,20 +1018,17 @@ namespace Oxide.Plugins
                     _plugin._activeSessions[player.userID] = session;
                 }
                 
-                if (session != null)
+                container.Add(new CuiLabel
                 {
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = $"Your Tokens: {session.Profile.Tokens}", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0 1 0 1" },
-                        RectTransform = { AnchorMin = "0.3 0.72", AnchorMax = "0.7 0.77" }
-                    }, UI_TAB_CONTAINER);
-                }
+                    Text = { Text = $"Your Tokens: {session.Profile.Tokens}", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "0 1 0 1" },
+                    RectTransform = { AnchorMin = "0.3 0.72", AnchorMax = "0.7 0.77" }
+                }, UI_TAB_CONTAINER);
                 
                 // Store items with prices, purchase buttons, and weapon slot indicators
                 var storeItems = new[]
                 {
                     new { Name = "AK-47 Neon Skin", Slot = "AK-47", Cost = 500, Id = "3102802323" },
-                    new { Name = "AK-47 Skin", Slot = "AK-47", Cost = 500, Id = "skin_ak47_neon" },
+                    new { Name = "AK-47 Classic Skin", Slot = "AK-47", Cost = 400, Id = "skin_ak47_neon" },
                     new { Name = "Extended Mag", Slot = "Attachment", Cost = 300, Id = "att_extended_mag" },
                     new { Name = "Reflex Sight", Slot = "Attachment", Cost = 250, Id = "att_reflex_sight" },
                     new { Name = "Silencer", Slot = "Attachment", Cost = 400, Id = "att_silencer" }
