@@ -510,8 +510,10 @@ namespace Oxide.Plugins
             var session = GetSession(player.userID);
             if (session == null)
             {
-                SendReply(player, "Session not found!");
-                return;
+                // Create session if it doesn't exist
+                var profile = _saveManager.LoadPlayerProfile(player.userID);
+                session = new PlayerSession(player, profile);
+                _activeSessions[player.userID] = session;
             }
             
             if (session.Profile.Tokens < cost)
@@ -896,12 +898,10 @@ namespace Oxide.Plugins
                 var session = _plugin.GetSession(player.userID);
                 if (session == null)
                 {
-                    container.Add(new CuiLabel
-                    {
-                        Text = { Text = "Loading profile...", FontSize = 16, Align = TextAnchor.MiddleCenter, Color = "1 0 0 1" },
-                        RectTransform = { AnchorMin = "0.3 0.5", AnchorMax = "0.7 0.6" }
-                    }, UI_TAB_CONTAINER);
-                    return;
+                    // Create session if it doesn't exist
+                    var profile = _plugin._saveManager.LoadPlayerProfile(player.userID);
+                    session = new PlayerSession(player, profile);
+                    _plugin._activeSessions[player.userID] = session;
                 }
                 
                 // Ensure loadout exists
@@ -1010,6 +1010,14 @@ namespace Oxide.Plugins
                 }, UI_TAB_CONTAINER);
                 
                 var session = _plugin.GetSession(player.userID);
+                if (session == null)
+                {
+                    // Create session if it doesn't exist
+                    var profile = _plugin._saveManager.LoadPlayerProfile(player.userID);
+                    session = new PlayerSession(player, profile);
+                    _plugin._activeSessions[player.userID] = session;
+                }
+                
                 if (session != null)
                 {
                     container.Add(new CuiLabel
@@ -1019,33 +1027,48 @@ namespace Oxide.Plugins
                     }, UI_TAB_CONTAINER);
                 }
                 
-                // Store items with prices and purchase buttons
+                // Store items with prices, purchase buttons, and weapon slot indicators
                 var storeItems = new[]
                 {
-                    new { Name = "AK-47 Skin", Cost = 500, Id = "skin_ak47_neon" },
-                    new { Name = "Extended Mag", Cost = 300, Id = "att_extended_mag" },
-                    new { Name = "Reflex Sight", Cost = 250, Id = "att_reflex_sight" },
-                    new { Name = "Silencer", Cost = 400, Id = "att_silencer" }
+                    new { Name = "AK-47 Neon Skin", Slot = "AK-47", Cost = 500, Id = "3102802323" },
+                    new { Name = "AK-47 Skin", Slot = "AK-47", Cost = 500, Id = "skin_ak47_neon" },
+                    new { Name = "Extended Mag", Slot = "Attachment", Cost = 300, Id = "att_extended_mag" },
+                    new { Name = "Reflex Sight", Slot = "Attachment", Cost = 250, Id = "att_reflex_sight" },
+                    new { Name = "Silencer", Slot = "Attachment", Cost = 400, Id = "att_silencer" }
                 };
                 
                 for (int i = 0; i < storeItems.Length; i++)
                 {
                     var item = storeItems[i];
-                    float yMin = 0.60f - (i * 0.12f);
+                    float yMin = 0.60f - (i * 0.10f);
                     float yMax = yMin + 0.08f;
                     
                     // Item panel
                     container.Add(new CuiPanel
                     {
                         Image = { Color = "0.2 0.2 0.2 1" },
-                        RectTransform = { AnchorMin = $"0.2 {yMin}", AnchorMax = $"0.8 {yMax}" }
+                        RectTransform = { AnchorMin = $"0.15 {yMin}", AnchorMax = $"0.85 {yMax}" }
                     }, UI_TAB_CONTAINER);
                     
-                    // Item name and price
+                    // Item name
                     container.Add(new CuiLabel
                     {
-                        Text = { Text = $"{item.Name} - {item.Cost} Tokens", FontSize = 14, Align = TextAnchor.MiddleLeft },
-                        RectTransform = { AnchorMin = $"0.22 {yMin}", AnchorMax = $"0.6 {yMax}" }
+                        Text = { Text = item.Name, FontSize = 14, Align = TextAnchor.MiddleLeft },
+                        RectTransform = { AnchorMin = $"0.17 {yMin}", AnchorMax = $"0.45 {yMax}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // Item slot/weapon indicator
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = $"[{item.Slot}]", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "0.7 0.7 0.7 1" },
+                        RectTransform = { AnchorMin = $"0.46 {yMin}", AnchorMax = $"0.56 {yMax}" }
+                    }, UI_TAB_CONTAINER);
+                    
+                    // Price
+                    container.Add(new CuiLabel
+                    {
+                        Text = { Text = $"{item.Cost} Tokens", FontSize = 12, Align = TextAnchor.MiddleCenter, Color = "1 0.8 0 1" },
+                        RectTransform = { AnchorMin = $"0.57 {yMin}", AnchorMax = $"0.68 {yMax}" }
                     }, UI_TAB_CONTAINER);
                     
                     // Purchase button
@@ -1054,7 +1077,7 @@ namespace Oxide.Plugins
                     {
                         Button = { Command = $"killadome.purchase {item.Id} {item.Cost}", Color = buttonColor },
                         Text = { Text = "BUY", FontSize = 12, Align = TextAnchor.MiddleCenter },
-                        RectTransform = { AnchorMin = $"0.65 {yMin + 0.01f}", AnchorMax = $"0.78 {yMax - 0.01f}" }
+                        RectTransform = { AnchorMin = $"0.70 {yMin + 0.01f}", AnchorMax = $"0.83 {yMax - 0.01f}" }
                     }, UI_TAB_CONTAINER);
                 }
                 
